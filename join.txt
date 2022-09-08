@@ -1,0 +1,248 @@
+select distinct c.customerid, (c.custfirstname || ' ' || c.custlastname) name, c.custstreetaddress, o.ordernumber, o.employeeid, od.productnumber,p.productname
+  from customers c, orders o, order_details od, products p
+ where c.customerid = o.customerid
+   and o.ordernumber = od.ordernumber
+   and od.productnumber = p.productnumber;
+   and p.productname = '%Bike%';
+-----------------------------
+select distinct c.customerid, (c.custfirstname || ' ' || c.custlastname) name, c.custstreetaddress, o.ordernumber, o.employeeid, od.productnumber,p.productname
+  from customers c, orders o, order_details od, products p
+ where c.customerid = o.customerid
+   and o.ordernumber = od.ordernumber
+   and od.productnumber = p.productnumber;
+   and p.productname = 'Helmet';
+
+
+
+select p.productnumber, p.productname
+  from products p
+ where p.productnumber not in (
+                                select productnumber
+                                  from order_details
+                              );
+
+
+select p.productnumber, p.productname
+  from products p
+ where not exists (
+                select *
+                  from order_details od
+                 where p.productnumber = od.productnumber
+              );
+
+
+select p.productnumber, p.productname
+  from products p, order_details od
+ where p.productnumber = od.productnumber(+)
+   and od.productnumber is null;
+   
+
+select customerid, custfirstname, custlastname
+  from customers
+ where (
+        1 = (
+                case
+                    when customerid not in (
+                        select o.customerid
+                          from orders o, order_details od, products p
+                         where o.ordernumber = od.ordernumber
+                           and od.productnumber = p.productnumber
+                           and p.productname = '%Skateboard%'
+                       ) then 0
+                    when customerid in (
+                        select o.customerid
+                          from orders o, order_details od, products p
+                         where o.ordernumber = od.ordernumber
+                           and od.productnumber = p.productnumber
+                           and p.productname = '%Helmet%'
+                       ) then 0
+                    else 1
+                end
+            )
+       );
+
+
+create or replace function dept_name(v_deptno number)
+    return varchar2
+is 
+    v_dname dept.dname%type;
+begin
+    select dname into v_dname
+      from dept
+     where deptno = v_deptno;
+     
+
+     return v_dname;
+end;
+
+select dept_name(10)
+  from dual;
+
+
+create or replace function prod_name(prname in varchar2)
+    return varchar2
+is
+    v_custname customers.custfirstname%type;
+begin
+    select c.custfirstname into v_custname
+      from orders o, order_details od, products p, customers c
+     where o.ordernumber = od.ordernumber
+       and od.productnumber = p.productnumber
+       and o.customerid = c.customerid
+       and p.productname = prname;
+       
+       return v_custname;
+end;
+
+--스케이트 보드를 구입한 구매자
+select c.customerid, c.custfirstname, c.custlastname
+  from customers c
+ where exists(
+                select o.customerid
+                  from orders o, order_details od, products p
+                 where o.ordernumber = od.ordernumber
+                   and od.productnumber = p.productnumber
+                   and o.customerid = c.customerid
+                   and p.productname like '%Skateboard%'
+             );
+             
+
+-- 주문자 정보, 주문내역 뷰             
+create view customerproducts as
+select distinct c.customerid, c.custfirstname, c.custlastname, p.productname
+  from customers c, orders o, order_details od, products p
+ where c.customerid = o.customerid
+   and o.ordernumber = od.ordernumber
+   and p.productnumber = od.productnumber;
+
+
+-- 관심제품 추출 뷰
+create view prodsofinterest as
+select p.productname
+  from products p
+ where regexp_like(p.productname, 'Skateboard|Helmet|Knee Pads|Gloves');
+
+-- exists를 이용한 주문자 관심제품 정보 조회
+select distinct cp1.customerid, cp1.custfirstname, cp1.custlastname
+  from customerproducts cp1
+ where not exists (
+                    select productname
+                      from prodsofinterest pofi
+                     where not exists(
+                                        select customerid
+                                          from customerproducts cp2
+                                         where cp2.customerid = cp1.customerid
+                                           and cp2.productname = pofi.productname
+                                     )
+                  );
+                  
+                  
+-- having을 이용한 주문자 관심제품 정보 조회                  
+select cp.customerid, cp.custfirstname, cp.custlastname
+  from customerproducts cp, prodsofinterest pofi
+ where cp.productname = pofi.productname
+group by cp.customerid, cp.custfirstname, cp.custlastname
+having count(cp.productname) = (
+                                select count(productname)
+                                  from prodsofinterest
+                               );
+                  
+
+create table temp(
+    idx number primary key,
+    name varchar2(10),
+    cphone varchar2(20),
+    tel varchar2(20),
+    addr varchar2(30)
+);
+
+
+select idx, name, cphone, tel, nvl(cphone, tel) concat, addr
+  from temp;
+
+
+select idx, name, cphone, tel, addr
+  from temp
+ where cphone = '010-2222-1111'
+    or cphone is null;
+    
+-------------    
+select employeeid, empfirstname, emplastname
+  from employees
+ where emplastname = 'Viescas'
+    or emplastname is null;
+-------------
+select employeeid, empfirstname, emplastname
+  from employees
+ where emplastname = 'Viescas'
+ union all
+ select employeeid, empfirstname, emplastname
+  from employees
+ where emplastname is null;
+    
+
+select c.customerid, c.custfirstname, c.custlastname, o.ordernumber, o.orderdate, o.ordertotal
+  from customers c, orders o
+ where c.customerid = o.customerid
+   and o.orderdate between to_date('2015-10-01', 'yyyy-mm-dd') and to_date('2015-12-31', 'yyyy-mm-dd')
+    or o.ordernumber is null;
+    
+    
+select customerid, custfirstname
+  from customers
+group by customerid, custfirstname;
+
+select productname, sum(retailprice)
+  from products
+group by rollup(productname);
+
+select c.customerid, c.custfirstname, c.custlastname, c.custstate,
+       max(o.orderdate), count(o.ordernumber), sum(o.ordertotal)
+  from customers c, orders o
+group by c.customerid, c.custfirstname, c.custlastname, c.custstate;
+
+
+select c.categorydescription, p.productname, sum(od.quotedprice * od.quantityordered) as totalsales
+  from products p, order_details od, categories c, orders o
+ where p.productnumber = od.productnumber
+   and c.categoryid = p.categoryid
+   and o.ordernumber = od.ordernumber
+   and to_char(o.orderdate, 'yyyy-mm-dd') between '2015-10-01' and '2015-12-31'
+group by p.categoryid, c.categorydescription, p.productname
+having sum(od.quotedprice * od.quantityorderd) > (
+                                                    select avg(SumCategory)
+                                                      from (
+                                                            select p2.categoryid, sum(od2.quotedprice * od2.quantityordered) as SumCategory
+                                                              from products p2, order_details od2, orders o2
+                                                             where p2.productnumber = od2.productnumber
+                                                               and p2.categoryid = p.categoryid
+                                                               and o2.ordernumber = od2.ordernumber
+                                                               and to_char(o2.orderdate, 'yyyy-mm-dd') between '2015-10-01' and '2015-12-31'
+                                                            group by p2.categoryid, p2.productnumber
+                                                           ) as s
+                                                    group by categoryid
+                                                 )
+order by c.categorydescription, p.productname;                                                
+
+
+
+
+--함수--
+--dept_name(number);
+--뷰--
+select * from customerproducts;
+select * from prodsofinterest;
+------테이블---------------------
+select * from customers;
+select * from products;
+select * from product_vendors;
+select * from order_details;
+select * from orders;
+select * from employees;
+select * from vendors;
+select * from students;
+select * from temp;
+select * from categories;
+-----------------------------
+
+

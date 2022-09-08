@@ -1,0 +1,638 @@
+SELECT BeefRecipes.RECIPETITLE
+  FROM (
+        SELECT A.RECIPEID, A.RECIPETITLE
+          FROM RECIPES A, RECIPE_INGREDIENTS B, INGREDIENTS C
+         WHERE A.RECIPEID = B.RECIPEID
+           AND B.INGREDIENTID = C.INGREDIENTID
+           AND C.INGREDIENTNAME = 'Beef'
+       ) BeefRecipes
+      ,(
+        SELECT A.RECIPEID
+          FROM RECIPE_INGREDIENTS A, INGREDIENTS B
+         WHERE A.INGREDIENTID = B.INGREDIENTID
+           AND B.INGREDIENTNAME = 'Garlic'
+       ) GarlicRecipes
+ WHERE BeefRecipes.RecipeID = GarlicRecipes.RecipeID;
+       
+
+
+SELECT A.CustomerID, A.CustFirstName, A.CustLastName, B.OrderNumber, B.OrderDate
+  FROM Customers A, Orders B
+ WHERE A.CustomerID = B.CustomerID
+   AND EXISTS(
+                SELECT NULL
+                  FROM Orders B2, Order_Details C, Products D
+                 WHERE B2.OrderNumber = C.OrderNumber
+                   AND D.ProductNumber = C.ProductNumber
+                   AND D.ProductName = 'Skateboard'
+                   AND B2.OrderNumber = B.OrderNumber
+             )
+   AND EXISTS(
+                SELECT NULL
+                  FROM Orders B3, Order_Details C2, Products D2
+                 WHERE B3.OrderNumber = C2.OrderNumber
+                   AND D2.ProductNumber = C2.ProductNumber
+                   AND D2.ProductName = 'Helmet'
+                   AND B3.OrderName = B.OrderName
+             );
+ 
+ 
+
+
+CREATE OR REPLACE FUNCTION AFTERTAX
+(
+    SAL IN NUMBER,
+    COMM IN NUMBER
+    
+)
+RETURN NUMBER
+IS
+    TAX NUMBER := 0.2;
+BEGIN
+    IF(COMM IS NULL) OR (COMM = 0) THEN
+        RETURN ROUND(SAL - (SAL * TAX));
+    ELSE
+        RETURN ROUND(SAL - ((SAL + COMM) * TAX));
+    END IF;
+END;
+/
+
+
+CREATE OR REPLACE FUNCTION AFTERTAX_YEAR
+(
+    SAL NUMBER,
+    COMM NUMBER
+)
+RETURN NUMBER
+IS
+    TAX NUMBER := 0.2;
+BEGIN
+    IF(COMM IS NULL) OR (COMM = 0) THEN
+        RETURN ROUND((SAL - (SAL * TAX)) * 12);
+    ELSE
+        RETURN ROUND((SAL - ((SAL + COMM) * TAX)) * 12);
+    END IF;
+END;
+/
+
+
+SELECT EMPNO, ENAME, SAL, AFTERTAX(SAL, COMM) 월급, AFTERTAX_YEAR(SAL, COMM) 연봉
+  FROM EMP;
+
+
+
+CREATE TABLE MEMBER_SAL
+(
+    MNUM NUMBER(2) NOT NULL,
+    MNAME VARCHAR2(20),
+    MJOB VARCHAR2(20),
+    MSAL NUMBER(15),
+    MCOMM NUMBER(15),
+    TAXPER NUMBER(5, 2),
+    HIREDATE DATE DEFAULT SYSDATE
+);
+
+
+
+INSERT INTO MEMBER_SAL(MNUM, MNAME, MJOB, MSAL, MCOMM, TAXPER)
+VALUES(10, 'KimInHo', 'WEB', 1920000, 1200000, 0.1);
+
+
+SELECT * FROM MEMBER_SAL;
+
+
+
+CREATE OR REPLACE FUNCTION TAXAFTER
+(
+    SAL IN NUMBER,
+    COMM IN NUMBER,
+    TAXPER IN NUMBER
+)
+RETURN NUMBER
+IS
+    HIREDATE DATE := SYSDATE;
+BEGIN
+    IF TO_CHAR(HIREDATE, 'MM') IN ('03', '06', '09', '12') THEN
+        IF (COMM IS NULL) OR (COMM = 0) THEN
+            RETURN ROUND(SAL - (SAL * TAXPER));
+        ELSE
+            RETURN ROUND((SAL + COMM) - ((SAL + COMM) * TAXPER));
+        END IF;
+    ELSE
+        RETURN ROUND(SAL - (SAL * TAXPER));
+    END IF;
+END;
+/
+
+
+CREATE OR REPLACE FUNCTION TAXPER_YEAR
+(
+    SAL IN NUMBER,
+    COMM IN NUMBER,
+    TAXPER IN NUMBER
+)
+RETURN NUMBER
+IS
+BEGIN
+    RETURN ROUND((((SAL + COMM) - ((SAL + COMM) * TAXPER)) * 4) + ((SAL - (SAL * TAXPER)) * 8));
+END;
+/
+
+
+SELECT MNAME, ROUND((MSAL + MCOMM) - ((MSAL + MCOMM) * TAXPER))
+  FROM MEMBER_SAL;
+
+
+SELECT MNUM 사원번호, MNAME 이름, MJOB 업무, MSAL 세전월급, TO_CHAR(HIREDATE, 'YYYY-MM-DD') 입사일, TAXAFTER(MSAL, MCOMM, TAXPER) "세후 월급 + 상여", TAXPER_YEAR(MSAL, MCOMM, TAXPER) 세후연봉
+  FROM MEMBER_SAL;
+
+
+
+
+
+
+
+SELECT * FROM DEPT;
+SELECT * FROM EMP;
+
+
+WITH EMP_W1 AS
+(
+    SELECT DEPTNO, SUM(SAL) SAL 
+      FROM EMP
+    GROUP BY DEPTNO
+)
+SELECT A.DEPTNO, B.DNAME, A.SAL
+  FROM EMP_W1 A, DEPT B
+ WHERE A.DEPTNO = B.DEPTNO;
+ 
+ 
+--------------------------------------
+SELECT e.ename AS employee_name, 
+          dc.dept_count AS emp_dept_count 
+FROM emp e,
+       (SELECT deptno, COUNT(*) AS dept_count
+        FROM emp GROUP BY deptno) dc 
+WHERE e.deptno = dc.deptno;
+
+
+WITH DC AS 
+(
+    SELECT DEPTNO, COUNT(*) DEPT_COUNT
+      FROM EMP 
+    GROUP BY DEPTNO
+)
+SELECT E.ENAME, D.DEPT_COUNT
+  FROM EMP E, DC D
+ WHERE E.DEPTNO = D.DEPTNO;
+ 
+--------------------------------------
+
+SELECT e.ename AS employee_name,  
+          dc1.dept_count AS emp_dept_count, 
+          m.ename AS manager_name, 
+          dc2.dept_count AS mgr_dept_count 
+FROM emp e,
+        (SELECT deptno, COUNT(*) AS dept_count 
+         FROM emp GROUP BY deptno) dc1,
+        emp m, 
+        (SELECT deptno, COUNT(*) AS dept_count 
+         FROM emp GROUP BY deptno) dc2 
+WHERE e.deptno = dc1.deptno 
+    AND e.mgr = m.empno 
+    AND m.deptno = dc2.deptno; 
+    
+-------------------------------------- 
+    
+WITH DC1 AS 
+(
+    SELECT DEPTNO, COUNT(*) DEPT_COUNT
+      FROM EMP
+    GROUP BY DEPTNO
+)
+SELECT E.ENAME, D1.DEPT_COUNT, M.ENAME, D2.DEPT_COUNT
+  FROM EMP E, DC1 D1, EMP M, DC1 D2
+ WHERE E.DEPTNO = D1.DEPTNO
+   AND E.MGR = M.EMPNO
+   AND M.DEPTNO = D2.DEPTNO;
+--------------------------------------
+
+SELECT * FROM SALGRADE;
+
+WITH GRADE_SAL AS
+(
+    SELECT S.GRADE, E.EMPNO
+      FROM SALGRADE S, EMP E
+     WHERE E.SAL BETWEEN S.LOSAL AND S.HISAL
+)
+SELECT *
+  FROM EMP E, GRADE_SAL G
+ WHERE E.EMPNO = G.EMPNO;
+ 
+
+--------------------------------------
+SELECT * FROM EMP;
+SELECT * FROM DEPT;
+
+
+WITH EMP_E(EMPNO, ENAME) AS 
+(
+    SELECT EMPNO, ENAME
+      FROM EMP
+     WHERE EMPNO > 7500
+)
+SELECT E.ENAME, E.JOB
+  FROM EMP E, EMP_E E2
+ WHERE E.EMPNO = E2.EMPNO
+   AND E.ENAME LIKE 'A%';
+   
+   
+SELECT *
+  FROM EMP E
+ WHERE EXISTS(
+                SELECT 1
+                  FROM DEPT 
+                 WHERE E.DEPTNO = DEPTNO
+                   AND LOC LIKE 'N%'
+                   AND E.MGR IS NOT NULL
+             );
+ 
+ 
+CREATE TABLE EMPLOYEES(
+    EMPID NUMBER(2) NOT NULL,
+    MGRID NUMBER(2),
+    EMPNAME VARCHAR2(25) NOT NULL,
+    SALARY VARCHAR2(25)
+);
+ 
+  
+
+INSERT INTO employees VALUES(1, NULL, 'Nancy',10000);
+INSERT INTO employees VALUES(2, 1, 'Andrew', 5000 );
+INSERT INTO employees VALUES(3, 1, 'Janet', 5000 );
+INSERT INTO employees VALUES(4, 1, 'Margaret', 5000 );
+INSERT INTO employees VALUES(5, 2, 'Steven', 2500 );
+INSERT INTO employees VALUES(6, 2, 'Michael', 2500 );
+INSERT INTO employees VALUES(7, 3, 'Robert', 2500 );
+INSERT INTO employees VALUES(8, 3, 'Laura', 2500 );
+INSERT INTO employees VALUES(9, 3, 'Ann', 2500 );
+INSERT INTO employees VALUES(10, 4, 'Ina', 2500 );
+INSERT INTO employees VALUES(11, 7, 'David', 2000); 
+INSERT INTO employees VALUES(12, 7, 'Ron', 2000 );
+INSERT INTO employees VALUES(13, 7, 'Dan', 2000 );
+INSERT INTO employees VALUES(14, 11, 'James', 1500 );
+
+
+SELECT * FROM EMPLOYEES;
+
+
+
+WITH EMP(MYID, SENIORID, MYNAME, MYSALARY) AS
+(
+    SELECT EMPID, MGRID, EMPNAME, SALARY
+      FROM EMPLOYEES
+)
+SELECT MYID, SENIORID, MYNAME, MYSALARY
+  FROM EMP;
+
+
+
+
+WITH UNDERSALARY(EMPID, SALARY) AS
+(
+    SELECT MGRID, SUM(SALARY)
+      FROM EMPLOYEES
+    GROUP BY MGRID
+)
+SELECT E.EMPID, MGRID, EMPNAME, E.SALARY, U.SALARY SUBTOTAL
+  FROM EMPLOYEES E, UNDERSALARY U
+ WHERE E.EMPID = U.EMPID;
+
+
+
+
+WITH UNDERSALARY(EMPID, SALARY) AS
+(
+    SELECT MGRID, SUM(SALARY)
+      FROM EMPLOYEES
+    GROUP BY MGRID
+),
+WITH EMP(EMPID, MGRID, EMPNAME, SALARY, SUBTOTAL) AS
+(
+    SELECT E.EMPID,.MGRID, EMPNAME, E.SALARY, U.SALARY SUBTOTAL
+      FROM EMPLOYEES E, UNDERSALARY U
+     WHERE E.EMPID = U.EMPID
+)
+SELECT *
+  FROM EMP;
+
+
+ 
+WITH EMPCTE(EMPID, EMPNAME, MGRID, LVL) AS
+(
+    SELECT EMPID, EMPNAME, MGRID, 0
+      FROM EMPLOYEES
+     WHERE EMPID = 1
+     UNION ALL
+     SELECT E.EMPID, E.EMPNAME, E.MGRID, M.LVL+1
+       FROM EMPLOYEES E, EMPCTE M
+      WHERE E.MGRID = M.EMPID
+)
+SELECT * FROM EMPCTE;
+
+
+CREATE TABLE CUSTOMER(
+    CUSID NUMBER(5) NOT NULL,
+    CUSNAME VARCHAR2(20) NOT NULL,
+    CUSAGE NUMBER(2) NOT NULL,
+    ADDRESS VARCHAR2(25),
+    SALARY NUMBER(10)
+);
+ 
+ 
+DROP TABLE CUSTOMER;
+ 
+ 
+ 
+ 
+ 
+
+
+WITH member_sal(ename, esal, ejob, esalgrade) as
+(
+    select e.ename, e.sal, e.job, s.grade
+      from emp e, salgrade s
+     where e.sal between s.losal and s.hisal
+       and s.grade >= 3
+       and e.job = 'MANAGER'
+    union all
+    select e.ename, e.sal, e.job, s.grade
+      from emp e, salgrade s
+     where e.sal between s.losal and s.hisal
+       and s.grade >= 3
+       and e.job = 'ANALYST'
+)
+select ename, esal, ejob, esalgrade
+  from member_sal;
+
+
+select decode(grouping(job), 1, '합계', job) job, deptno, sum(sal) sal
+  from emp
+group by rollup(job, deptno)
+having grouping_id(job, deptno) in (0, 3);
+
+
+select (p.fname || ' ' || p.lname) name, p.position, p.team_id, t.name
+  from players p, teams t
+ where p.team_id = t.id;
+
+select count(*), avg(salary)
+  from employees
+group by empid
+having count(*) >= 1;
+
+select deptno, sum(sal)
+  from emp
+ where job <> 'CLERK'
+group by deptno
+having sum(sal) >= 4000
+order by deptno;
+
+select job, sum(sal)
+  from emp
+ where job <> 'MANAGER'
+group by job
+having sum(sal) > 5000
+order by sum(sal) desc;
+
+select empno, ename, job, sal
+  from emp
+ where sal > (select sal
+                from emp
+               where ename = 'SCOTT'
+             );
+
+
+select ename, to_char(hiredate, 'yyyy/mm/dd') hiredate
+  from emp
+ where hiredate = (
+                    select min(hiredate)
+                      from emp
+                  );
+
+
+select deptno, min(sal)
+  from emp
+ group by deptno
+ having min(sal) > (
+                    select min(sal)
+                      from emp
+                     where deptno = 20
+                   );
+
+
+select empno, ename, job, deptno
+  from emp
+ where sal in (
+                select min(sal)
+                  from emp
+                group by deptno
+              );
+ 
+select empno, ename, job, deptno
+  from emp
+ where deptno <> 30
+   and sal > any (
+                    select sal
+                      from emp
+                     where deptno = 20
+                 );
+
+select e.ename, d.dname, d.loc, e.job
+  from emp e, dept d
+ where e.deptno = d.deptno
+   and e.job = 'MANAGER';
+  
+  
+select empno, decode(deptno, 10, '인사부', 20, '관리부', 30, '회계부', '기타') 부서이름
+  from emp;
+  
+
+select deptno, sum(sal) 총급여, count(*) 인원수
+  from emp
+ where comm is null
+group by deptno
+having sum(sal) >= 3000
+order by sum(sal) desc;
+
+
+select e.ename, e.empno, f.ename, f.empno
+  from emp e, emp f
+ where e.mgr = f.empno(+);
+
+select empno, ename, sal, deptno
+  from emp
+ where sal > (
+                select max(sal)
+                  from emp
+                 where deptno = 20
+             );
+             
+             
+select empno, ename, job, sal
+  from emp
+ where deptno in (
+                    select deptno
+                      from emp
+                     where job = 'SALESMAN'
+                 )
+   and sal in (
+                select deptno
+                  from emp
+                 where job = 'SALESMAN'
+              );
+              
+              
+select e.empno, e.ename, e.deptno, e.sal, d.avgsal
+  from emp e,
+       (
+        select deptno, avg(sal) avgsal
+          from emp
+         group by deptno
+       ) d
+ where e.deptno = d.deptno
+   and e.sal < d.avgsal;
+   
+   
+select ename, sal, deptno, comm
+  from emp
+ where comm is not null
+   and sal in (
+                select sal
+                  from emp
+                 where comm is not null
+              );
+    
+
+create table emp2
+as select * from emp;
+
+
+select e.empno 번호, e.ename 이름, d.ename 관리자이름, (e.sal + nvl(e.comm, 0)) 월급
+  from emp2 e, emp2 d, (select deptno, avg(sal) avgsal
+                          from emp2
+                        group by deptno
+                       ) f
+ where e.mgr = d.empno
+   and e.deptno = f.deptno
+   and e.sal > f.avgsal;
+
+
+create table emp10
+(
+    empno number constraint pk_emp10 primary key,
+    ename varchar2(50),
+    pay number,
+    annual_income number generated always as (pay * 12) virtual
+);
+
+insert into emp10(empno, ename, pay)
+select empno, ename, sal from emp;
+
+
+select * from emp10;
+
+
+alter table emp10 add
+(
+    grade as(
+        case
+            when pay <= 1190 then 'Low'
+            when pay > 1200 and pay <= 2500 then 'Normal'
+            when pay > 2500 then 'High'
+        end
+    )
+);
+
+
+select * from emp10;
+
+
+select count(*)
+  from emp e, dept d
+ where e.deptno = d.deptno
+   and d.dname = 'RESEARCH'
+   and sal <= 2000;
+   
+select count(*)
+  from emp e,
+       (
+        select deptno
+          from dept
+         where dname = 'RESEARCH'
+       ) d
+ where e.deptno = d.deptno
+   and e.sal <= 2000;
+
+
+
+create table temp10(
+    id number constraint pk_temp10 primary key,
+    name varchar2(20) not null,
+    jumin varchar2(6) not null constraint uk_temp10_jumin unique,
+    addr varchar2(20),
+    age number not null constraint ck_temp10_age check(age >= 19)
+);
+
+
+select *
+  from user_constraints
+ where table_name = 'temp10';
+insert into temp10 values(100, '고길동', '123456', '서울시', 20);
+insert into temp10 values(200, '사춘기', '223456', '서울시', 21);
+
+
+select * from temp10;
+
+
+
+
+
+SELECT * FROM BONUS;
+SELECT * FROM DEPT;
+SELECT * FROM DEPT_TEMP;
+SELECT * FROM DEPT_TEMP2;
+SELECT * FROM EMP;
+SELECT * FROM EMPLOYEES;
+SELECT * FROM EMP_TEMP;
+SELECT * FROM PLAYERS;
+SELECT * FROM SALGRADE;
+SELECT * FROM TEAMS;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
